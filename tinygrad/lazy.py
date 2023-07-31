@@ -1,7 +1,7 @@
 from __future__ import annotations
 import operator
 from typing import Callable, Optional, Tuple, Union, List, Dict, Any, cast
-import sys, importlib, inspect, pathlib, contextlib
+import sys, importlib, inspect, functools, pathlib, contextlib
 from weakref import ref
 
 import numpy as np
@@ -317,18 +317,19 @@ def elementwise_op(op:Union[UnaryOps, BinaryOps, TernaryOps], *srcs:LazyBuffer, 
 
   return create_lazybuffer(out_device, ShapeTracker(out_shape), BinaryOps, LazyOp(op, srcs, arg), out_dtype)
 
-class _Device(Dict[str, Union[Interpreted, Compiled]]):
+class _Device:
   def __init__(self) -> None:
-    super().__init__()
-    devices: List[str] = [x.stem[len("ops_"):].upper() for x in (pathlib.Path(__file__).parent/"runtime").iterdir() if x.stem.startswith("ops_")]
-    for x in devices: self._import_class(x)
-    self.DEFAULT: str = next(filter(lambda ele: getenv(ele) == 1, devices), self._default_device())
+    self._devices: List[str] = [x.stem[len("ops_"):].upper() for x in (pathlib.Path(__file__).parent/"runtime").iterdir() if x.stem.startswith("ops_")]
+    self.DEFAULT: str = next(filter(lambda ele: getenv(ele) == 1, self._devices), self._default_device())
+  @functools.lru_cache(maxsize=None)  # this class is a singleton, pylint: disable=method-cache-max-size-none
+  def __getitem__(self, x:str) -> Union[Interpreted, Compiled]: return next(cls for cname, cls in inspect.getmembers(importlib.import_module(f'tinygrad.runtime.ops_{x.lower()}')) if cname.lower() == x.lower() + "buffer")
   def _default_device(self) -> str:
     for device in ["METAL", "CUDA", "GPU"]:
-      if device in self: return device
+      with contextlib.suppress(Exception):
+        if self[device]: return device
     return "CPU"
-  def _import_class(self, x: str) -> Any:
-    with contextlib.suppress(Exception): self[x] = next(cls for cname, cls in inspect.getmembers(importlib.import_module(f'tinygrad.runtime.ops_{x.lower()}')) if cname.lower() == x.lower() + "buffer")
+    # return next((device for device in ["METAL", "CUDA", "GPU"] if self[device]), "CPU")
+  @functools.lru_cache(maxsize=None)  # this class is a singleton, pylint: disable=method-cache-max-size-none
   def canonicalize(self, device:Optional[str]) -> str: return (device.split(":", 1)[0].upper() + ((":"+device.split(":", 1)[1]) if ':' in device else '')).replace(":0", "") if device is not None else self.DEFAULT
 Device = _Device()
 
