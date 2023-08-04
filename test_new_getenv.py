@@ -1,19 +1,25 @@
-from tinygrad.helpers import getenv
+from tinygrad.helpers import getenv, Context, ContextVar
 
-# Get an environment variable (it will be cached)
-flag = getenv("FLAG", 0)
-assert flag == 0
+FLAG = getenv("FLAG", 0)
+assert FLAG == 0
 
-# Modify the cache manually
-getenv.cache["FLAG"] = 1
-
-# Flag is however still 0 since its just an integer value.
-assert flag == 0
+FLAG.value = 1
+assert FLAG == 1
 
 # Get the environment variable again (it will return the cached value)
-assert getenv("FLAG", 1) == 1
+assert getenv("FLAG") == 1
+assert FLAG == 1
+
 
 # Use a temporary cache
-with getenv.temporary_cache(FLAG=2):
+with Context(FLAG=2):
+    assert FLAG == 2
     assert getenv("FLAG") == 2
+
+assert FLAG == 1
 assert getenv("FLAG") == 1
+
+STRING = getenv("STRING", "")
+assert STRING == ""
+
+print('all ok')

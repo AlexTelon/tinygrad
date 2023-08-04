@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, functools, platform, time, re, contextlib
+import os, platform, time, re, contextlib
 from weakref import KeyedRef, ref
 from _weakref import _remove_dead_weakref # type: ignore
 import numpy as np
@@ -29,12 +29,8 @@ class SingletonMeta(type):
 
 class _GetEnv(metaclass=SingletonMeta):
   def __init__(self): self.cache = {}
-  def __call__(self, key, default=0): return self.cache.setdefault(key, type(default)(os.getenv(key, default)))
-  @contextlib.contextmanager
-  def temporary_cache(self, **kwargs):
-    original, self.cache = self.cache, kwargs
-    try: yield
-    finally: self.cache = original
+  def __call__(self, key, default=0) -> ContextVar: return self.cache.setdefault(key, ContextVar(key, self._lookup(key, default)))
+  def _lookup(self, key, default=0): return type(default)(os.getenv(key, default))
 getenv = _GetEnv()
 
 class Context(contextlib.ContextDecorator):
@@ -54,12 +50,14 @@ class ContextVar:
   def __new__(cls, key, default_value):
     if key in ContextVar._cache: return ContextVar._cache[key]
     instance = ContextVar._cache[key] = super().__new__(cls)
-    instance.value = getenv(key, default_value)
+    instance.value = getenv._lookup(key, default_value)
     return instance
   def __bool__(self): return bool(self.value)
   def __ge__(self, x): return self.value >= x
+  def __le__(self, x): return self.value <= x
   def __gt__(self, x): return self.value > x
   def __lt__(self, x): return self.value < x
+  def __eq__(self, x): return self.value == x
 
 DEBUG, IMAGE = ContextVar("DEBUG", 0), ContextVar("IMAGE", 0)
 GRAPH, PRUNEGRAPH, GRAPHPATH = getenv("GRAPH", 0), getenv("PRUNEGRAPH", 0), getenv("GRAPHPATH", "/tmp/net")
