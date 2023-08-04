@@ -23,18 +23,14 @@ def flatten(l:Iterator): return [item for sublist in l for item in sublist]
 def mnum(i) -> str: return str(i) if i >= 0 else f"m{-i}"
 def fromimport(mod, frm): return getattr(__import__(mod, fromlist=[frm]), frm)
 
-class SingletonMeta(type):
-  _instances: ClassVar[Dict[type, Any]] = {}
-  def __call__(cls, *args, **kwargs): return cls._instances.setdefault(cls, super().__call__(*args, **kwargs))
-
-class _GetEnv(metaclass=SingletonMeta):
-  def __init__(self): self.cache = {}
-  def __call__(self, key, default=0): return self.cache.setdefault(key, type(default)(os.getenv(key, default)))
+class _GetEnv():
+  cache: ClassVar[Dict[str, Any]] = {}
+  def __call__(self, key, default=0): return _GetEnv.cache.setdefault(key, type(default)(os.getenv(key, default)))
   @contextlib.contextmanager
   def temporary_cache(self, **kwargs):
-    original, self.cache = self.cache, kwargs
+    original, _GetEnv.cache = _GetEnv.cache, kwargs
     try: yield
-    finally: self.cache = original
+    finally: _GetEnv.cache = original
 getenv = _GetEnv()
 
 class Context(contextlib.ContextDecorator):
